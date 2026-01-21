@@ -15,13 +15,13 @@ from typing import Optional
 
 from fastmcp import FastMCP
 
-from scraper import scrape_marketplace
+from scraper import scrape_marketplace_async
 
 mcp = FastMCP("Facebook Marketplace")
 
 
 @mcp.tool()
-def search_marketplace(
+async def search_marketplace(
     query: str,
     days: Optional[int] = None,
     location_id: str = "108339199186201",
@@ -37,7 +37,7 @@ def search_marketplace(
     Returns:
         List of marketplace listings with title, price, location, url, and image_url.
     """
-    listings = scrape_marketplace(
+    listings = await scrape_marketplace_async(
         query=query,
         location_id=location_id,
         days_listed=days,

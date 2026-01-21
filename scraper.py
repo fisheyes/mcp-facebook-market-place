@@ -3,9 +3,10 @@
 Facebook Marketplace Scraper
 
 Uses Playwright to scrape listing data from Facebook Marketplace search results.
-Runs headless by default.
+Runs headless by default. Supports both sync and async APIs.
 """
 
+import asyncio
 import json
 import re
 import sys
@@ -13,7 +14,8 @@ from dataclasses import dataclass, asdict
 from typing import Optional
 from urllib.parse import quote
 
-from playwright.sync_api import sync_playwright, Page
+from playwright.async_api import async_playwright, Page as AsyncPage
+from playwright.sync_api import sync_playwright, Page as SyncPage
 
 
 @dataclass
@@ -27,17 +29,73 @@ class MarketplaceListing:
     image_url: Optional[str] = None
 
 
-def extract_listings_from_page(page: Page) -> list[MarketplaceListing]:
-    """
-    Extract listing data from the rendered page.
-    """
+def _parse_listing_text(all_text: str) -> tuple[str, str, str]:
+    """Parse listing text to extract title, price, and location."""
+    title = ''
+    price = ''
+    location = ''
+
+    lines = [line.strip() for line in all_text.split('\n') if line.strip()]
+
+    for line in lines:
+        # Price detection (£, $, €, or "Free")
+        if re.match(r'^[\$£€][\d,\.]+', line) or re.match(r'^[\d,\.]+\s*[\$£€]', line) or line.lower() == 'free':
+            if not price:
+                price = line
+        elif not title and len(line) > 2 and not re.match(r'^\d+$', line):
+            title = line
+        elif title and not location and len(line) > 2:
+            location = line
+
+    return title, price, location
+
+
+async def extract_listings_from_page_async(page: AsyncPage) -> list[MarketplaceListing]:
+    """Extract listing data from the rendered page (async version)."""
     listings = []
     seen_ids = set()
 
-    # Wait for listings to load - look for links to marketplace items
-    page.wait_for_selector('a[href*="/marketplace/item/"]', timeout=15000)
+    await page.wait_for_selector('a[href*="/marketplace/item/"]', timeout=15000)
+    listing_links = await page.query_selector_all('a[href*="/marketplace/item/"]')
 
-    # Find all listing links
+    for link in listing_links:
+        href = await link.get_attribute('href') or ''
+        match = re.search(r'/marketplace/item/(\d+)', href)
+        if not match:
+            continue
+
+        listing_id = match.group(1)
+        if listing_id in seen_ids:
+            continue
+        seen_ids.add(listing_id)
+
+        all_text = (await link.inner_text()).strip()
+        title, price, location = _parse_listing_text(all_text)
+
+        image_url = None
+        img = await link.query_selector('img')
+        if img:
+            image_url = await img.get_attribute('src')
+
+        if title or price:
+            listings.append(MarketplaceListing(
+                listing_id=listing_id,
+                title=title or f"Listing {listing_id}",
+                price=price or "Price not listed",
+                location=location,
+                url=f"https://www.facebook.com/marketplace/item/{listing_id}",
+                image_url=image_url,
+            ))
+
+    return listings
+
+
+def extract_listings_from_page_sync(page: SyncPage) -> list[MarketplaceListing]:
+    """Extract listing data from the rendered page (sync version)."""
+    listings = []
+    seen_ids = set()
+
+    page.wait_for_selector('a[href*="/marketplace/item/"]', timeout=15000)
     listing_links = page.query_selector_all('a[href*="/marketplace/item/"]')
 
     for link in listing_links:
@@ -51,37 +109,15 @@ def extract_listings_from_page(page: Page) -> list[MarketplaceListing]:
             continue
         seen_ids.add(listing_id)
 
-        # Navigate up to find the container with title, price, location
-        # Facebook's structure varies, so we try multiple approaches
-        container = link
-
-        # Try to find text content within the link or nearby
-        title = ''
-        price = ''
-        location = ''
-        image_url = None
-
-        # Get all text from the link element
         all_text = link.inner_text().strip()
-        lines = [line.strip() for line in all_text.split('\n') if line.strip()]
+        title, price, location = _parse_listing_text(all_text)
 
-        # Typically: price is first (has currency), title is second, location is third
-        for line in lines:
-            # Price detection (£, $, €, or "Free")
-            if re.match(r'^[\$£€][\d,\.]+', line) or re.match(r'^[\d,\.]+\s*[\$£€]', line) or line.lower() == 'free':
-                if not price:
-                    price = line
-            elif not title and len(line) > 2 and not re.match(r'^\d+$', line):
-                title = line
-            elif title and not location and len(line) > 2:
-                location = line
-
-        # Look for image
+        image_url = None
         img = link.query_selector('img')
         if img:
             image_url = img.get_attribute('src')
 
-        if title or price:  # Only add if we found some data
+        if title or price:
             listings.append(MarketplaceListing(
                 listing_id=listing_id,
                 title=title or f"Listing {listing_id}",
@@ -90,6 +126,66 @@ def extract_listings_from_page(page: Page) -> list[MarketplaceListing]:
                 url=f"https://www.facebook.com/marketplace/item/{listing_id}",
                 image_url=image_url,
             ))
+
+    return listings
+
+
+def _build_url(query: str, location_id: str, locale: str, days_listed: Optional[int]) -> str:
+    """Build the marketplace search URL."""
+    encoded_query = quote(query)
+    url = f"https://www.facebook.com/marketplace/{location_id}/search?query={encoded_query}&locale={locale}"
+    if days_listed is not None:
+        url += f"&daysSinceListed={days_listed}"
+    return url
+
+
+async def scrape_marketplace_async(
+    query: str,
+    location_id: str = "108339199186201",
+    locale: str = "en_GB",
+    days_listed: Optional[int] = None,
+    headless: bool = True,
+) -> list[MarketplaceListing]:
+    """
+    Scrape Facebook Marketplace search results (async version).
+
+    Use this when calling from an async context (e.g., MCP server).
+    """
+    url = _build_url(query, location_id, locale, days_listed)
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=headless)
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        )
+        page = await context.new_page()
+
+        try:
+            await page.goto(url, wait_until='networkidle', timeout=30000)
+
+            # Handle cookie consent
+            try:
+                cookie_btn = await page.query_selector('button[data-cookiebanner="accept_button"]')
+                if cookie_btn:
+                    await cookie_btn.click()
+                    await page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
+            try:
+                cookie_btn = await page.query_selector('button:has-text("Allow all cookies")')
+                if cookie_btn:
+                    await cookie_btn.click()
+                    await page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
+            await page.wait_for_timeout(2000)
+            listings = await extract_listings_from_page_async(page)
+
+        finally:
+            await browser.close()
 
     return listings
 
@@ -103,24 +199,11 @@ def scrape_marketplace(
     debug: bool = False,
 ) -> list[MarketplaceListing]:
     """
-    Scrape Facebook Marketplace search results.
+    Scrape Facebook Marketplace search results (sync version).
 
-    Args:
-        query: Search term
-        location_id: Facebook location ID
-        locale: Locale for results
-        days_listed: Only show listings from the last N days (e.g., 1, 7, 30)
-        headless: Run browser in headless mode (default True)
-        debug: Save screenshot and HTML for debugging
-
-    Returns:
-        List of MarketplaceListing objects
+    Use this for CLI usage or non-async contexts.
     """
-    encoded_query = quote(query)
-    url = f"https://www.facebook.com/marketplace/{location_id}/search?query={encoded_query}&locale={locale}"
-
-    if days_listed is not None:
-        url += f"&daysSinceListed={days_listed}"
+    url = _build_url(query, location_id, locale, days_listed)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
@@ -133,7 +216,7 @@ def scrape_marketplace(
         try:
             page.goto(url, wait_until='networkidle', timeout=30000)
 
-            # Handle cookie consent if it appears
+            # Handle cookie consent
             try:
                 cookie_btn = page.query_selector('button[data-cookiebanner="accept_button"]')
                 if cookie_btn:
@@ -142,7 +225,6 @@ def scrape_marketplace(
             except Exception:
                 pass
 
-            # Also try alternative cookie button selectors
             try:
                 cookie_btn = page.query_selector('button:has-text("Allow all cookies")')
                 if cookie_btn:
@@ -151,7 +233,6 @@ def scrape_marketplace(
             except Exception:
                 pass
 
-            # Wait a bit for dynamic content
             page.wait_for_timeout(2000)
 
             if debug:
@@ -160,7 +241,7 @@ def scrape_marketplace(
                     f.write(page.content())
                 print("Debug files saved: debug_screenshot.png, debug_page.html")
 
-            listings = extract_listings_from_page(page)
+            listings = extract_listings_from_page_sync(page)
 
         except Exception as e:
             if debug:
