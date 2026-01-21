@@ -15,7 +15,7 @@ from typing import Optional
 
 from fastmcp import FastMCP
 
-from scraper import scrape_marketplace_async
+from scraper import scrape_marketplace_async, get_listing_details_async
 
 mcp = FastMCP("Facebook Marketplace")
 
@@ -55,6 +55,34 @@ async def search_marketplace(
         }
         for l in listings
     ]
+
+
+@mcp.tool()
+async def get_listing_details(listing_id: str) -> dict:
+    """
+    Get full details for a specific Facebook Marketplace listing.
+
+    Use this to get the complete description, condition, and other details
+    for a listing found via search_marketplace.
+
+    Args:
+        listing_id: The listing ID (from search_marketplace results or URL)
+
+    Returns:
+        Full listing details including description, condition, and listing date.
+    """
+    details = await get_listing_details_async(listing_id=listing_id, headless=True)
+
+    return {
+        "listing_id": details.listing_id,
+        "title": details.title,
+        "price": details.price,
+        "location": details.location,
+        "description": details.description,
+        "condition": details.condition,
+        "listed_date": details.listed_date,
+        "url": details.url,
+    }
 
 
 if __name__ == "__main__":

@@ -29,6 +29,20 @@ class MarketplaceListing:
     image_url: Optional[str] = None
 
 
+@dataclass
+class ListingDetails:
+    """Full details for a single Facebook Marketplace listing."""
+    listing_id: str
+    title: str
+    price: str
+    location: str
+    description: str
+    condition: Optional[str] = None
+    listed_date: Optional[str] = None
+    seller_name: Optional[str] = None
+    url: Optional[str] = None
+
+
 def _parse_listing_text(all_text: str) -> tuple[str, str, str]:
     """Parse listing text to extract title, price, and location."""
     title = ''
@@ -188,6 +202,143 @@ async def scrape_marketplace_async(
             await browser.close()
 
     return listings
+
+
+async def get_listing_details_async(
+    listing_id: str,
+    headless: bool = True,
+) -> ListingDetails:
+    """
+    Get full details for a specific listing (async version).
+
+    Args:
+        listing_id: The Facebook Marketplace listing ID
+        headless: Run browser in headless mode
+
+    Returns:
+        ListingDetails with full description and metadata
+    """
+    url = f"https://www.facebook.com/marketplace/item/{listing_id}"
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=headless)
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        )
+        page = await context.new_page()
+
+        try:
+            await page.goto(url, wait_until='networkidle', timeout=30000)
+
+            # Handle cookie consent
+            try:
+                cookie_btn = await page.query_selector('button[data-cookiebanner="accept_button"]')
+                if cookie_btn:
+                    await cookie_btn.click()
+                    await page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
+            try:
+                cookie_btn = await page.query_selector('button:has-text("Allow all cookies")')
+                if cookie_btn:
+                    await cookie_btn.click()
+                    await page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
+            await page.wait_for_timeout(2000)
+
+            # Get all text from the page
+            body_text = await page.inner_text('body')
+            lines = [line.strip() for line in body_text.split('\n') if line.strip()]
+
+            # Parse the listing details
+            title = ''
+            price = ''
+            location = ''
+            description = ''
+            condition = None
+            listed_date = None
+
+            # Find key markers in the text
+            for i, line in enumerate(lines):
+                # Price is usually a line starting with currency
+                if re.match(r'^[\$£€][\d,\.]+$', line) or line.lower() == 'free':
+                    if not price:
+                        price = line
+
+                # "Listed X days ago" or "Listed on..."
+                if line.startswith('Listed ') and ('ago' in line or 'in ' in line):
+                    listed_date = line
+
+                # Condition markers
+                if line.startswith('Condition'):
+                    # Next non-empty line is usually the condition value
+                    if i + 1 < len(lines):
+                        condition = lines[i + 1]
+
+                # Location marker
+                if 'Location is approximate' in line and i > 0:
+                    # Location is usually a few lines before this
+                    for j in range(i - 1, max(0, i - 5), -1):
+                        if lines[j] and not lines[j].startswith('Listed') and len(lines[j]) > 3:
+                            location = lines[j]
+                            break
+
+            # Find title - usually appears early and matches listing title pattern
+            # It often appears after "Details" section
+            details_idx = None
+            for i, line in enumerate(lines):
+                if line == 'Details':
+                    details_idx = i
+                    break
+
+            if details_idx:
+                # Look for title and description after Details
+                # Pattern: Details -> Condition -> [condition value] -> [title] -> [description lines]
+                found_condition = False
+                past_condition = False
+                desc_lines = []
+                for i in range(details_idx + 1, min(details_idx + 20, len(lines))):
+                    line = lines[i]
+                    if line == 'Condition':
+                        found_condition = True
+                        continue
+                    if found_condition and not past_condition:
+                        condition = line
+                        past_condition = True
+                        continue
+                    if line in ['Message', 'Save', 'Share', 'Location is approximate']:
+                        break
+                    if past_condition and not title and len(line) > 5 and not re.match(r'^[\$£€]', line):
+                        title = line
+                    elif title and line != title and len(line) > 2 and line != condition:
+                        desc_lines.append(line)
+
+                description = '\n'.join(desc_lines)
+
+            # Fallback: if no title found, use first substantial text
+            if not title:
+                for line in lines:
+                    if len(line) > 10 and not re.match(r'^[\$£€]', line) and 'Facebook' not in line:
+                        title = line
+                        break
+
+            return ListingDetails(
+                listing_id=listing_id,
+                title=title,
+                price=price,
+                location=location,
+                description=description,
+                condition=condition,
+                listed_date=listed_date,
+                url=url,
+            )
+
+        finally:
+            await browser.close()
 
 
 def scrape_marketplace(

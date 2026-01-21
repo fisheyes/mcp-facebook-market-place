@@ -54,7 +54,7 @@ uv run python scraper.py "bike" --location 123456789
 uv run python scraper.py "test" --debug
 ```
 
-## MCP Tool
+## MCP Tools
 
 ### `search_marketplace`
 
@@ -81,6 +81,31 @@ Search Facebook Marketplace for listings.
     "image_url": "https://..."
   }
 ]
+```
+
+### `get_listing_details`
+
+Get full details for a specific listing, including description and condition.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `listing_id` | string | Yes | The listing ID from search results |
+
+**Returns:**
+
+```json
+{
+  "listing_id": "1564592031413917",
+  "title": "Malt Miller 35ltr Brew Kettle",
+  "price": "£95",
+  "location": "Swindon, Wiltshire",
+  "description": "Used but now upgrading my kit.",
+  "condition": "Used – like new",
+  "listed_date": "Listed 6 days ago in Swindon, Wiltshire",
+  "url": "https://www.facebook.com/marketplace/item/1564592031413917"
+}
 ```
 
 ## AWS Bedrock AgentCore Deployment
