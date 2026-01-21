@@ -4,6 +4,14 @@ Facebook Marketplace Scraper
 
 Uses Playwright to scrape listing data from Facebook Marketplace search results.
 Runs headless by default. Supports both sync and async APIs.
+
+IMPORTANT: This scraper is for educational purposes only. Users must:
+- Comply with Facebook's Terms of Service
+- Respect rate limits and implement appropriate delays
+- Use for research/educational purposes only
+- Not use for commercial data harvesting
+
+Default delays are implemented to encourage responsible usage.
 """
 
 import asyncio
@@ -195,7 +203,13 @@ async def scrape_marketplace_async(
             except Exception:
                 pass
 
+            # Wait for content to load
             await page.wait_for_timeout(2000)
+
+            # Respectful delay before scraping (minimum 3 seconds)
+            # This helps respect Facebook's servers and reduces load
+            await page.wait_for_timeout(3000)
+
             listings = await extract_listings_from_page_async(page)
 
         finally:
@@ -249,6 +263,10 @@ async def get_listing_details_async(
                 pass
 
             await page.wait_for_timeout(2000)
+
+            # Respectful delay before scraping (minimum 3 seconds)
+            # This helps respect Facebook's servers and reduces load
+            await page.wait_for_timeout(3000)
 
             # Get all text from the page
             body_text = await page.inner_text('body')
@@ -385,6 +403,10 @@ def scrape_marketplace(
                 pass
 
             page.wait_for_timeout(2000)
+
+            # Respectful delay before scraping (minimum 3 seconds)
+            # This helps respect Facebook's servers and reduces load
+            page.wait_for_timeout(3000)
 
             if debug:
                 page.screenshot(path='debug_screenshot.png')

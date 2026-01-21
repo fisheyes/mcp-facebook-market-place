@@ -2,6 +2,28 @@
 
 An MCP (Model Context Protocol) server that scrapes Facebook Marketplace listings. Built with FastMCP and Playwright for headless browser automation.
 
+## ⚠️ Important Legal Disclaimer
+
+**THIS SOFTWARE IS FOR EDUCATIONAL AND RESEARCH PURPOSES ONLY.**
+
+- This project is intended for learning about web scraping, MCP servers, and browser automation
+- Users must comply with Facebook's Terms of Service and robots.txt
+- Commercial use may violate Facebook's terms and applicable laws
+- Users are solely responsible for ensuring lawful use in their jurisdiction
+- The authors assume no liability for misuse of this software
+- Always respect rate limits and implement appropriate delays between requests
+- Consider using Facebook's official APIs for production applications
+
+**By using this software, you acknowledge that you have read and understood these terms and agree to use it responsibly and in compliance with all applicable laws and terms of service.**
+
+## Geographic Configuration
+
+This server is configured with UK defaults:
+- Default location ID: `108339199186201` (United Kingdom)
+- Default locale: `en_GB`
+
+You can override these settings by providing different location IDs for other regions.
+
 ## Features
 
 - Search Facebook Marketplace listings
@@ -10,6 +32,36 @@ An MCP (Model Context Protocol) server that scrapes Facebook Marketplace listing
 - Returns structured data: title, price, location, URL, and image
 - AWS Bedrock AgentCore Runtime compatible
 - Streamable HTTP transport for cloud deployments
+
+## Responsible Usage Guidelines
+
+To use this tool responsibly and minimize legal risks:
+
+### ✅ Acceptable Use
+- **Educational purposes**: Learning web scraping and MCP development
+- **Research projects**: Academic or personal research with proper attribution
+- **Local testing**: Running locally with minimal request frequency
+- **Open source contribution**: Improving the codebase for educational benefit
+
+### ❌ Prohibited Use
+- **Commercial scraping**: Large-scale data harvesting for profit
+- **Automated monitoring**: Continuous polling or high-frequency requests
+- **Data reselling**: Redistributing scraped data commercially
+- **Terms of service violation**: Any use that violates Facebook's ToS
+
+### 🛡️ Best Practices
+- **Rate limiting**: Add delays between requests (recommended: 2-5 seconds minimum)
+- **Respect robots.txt**: Check Facebook's robots.txt before use
+- **Limited scope**: Use for specific, targeted searches only
+- **Data handling**: Don't store or redistribute personal information
+- **Attribution**: Credit this project if used in research or education
+
+### 📍 UK Legal Context
+Under UK law (Data Protection Act 2018, Computer Misuse Act 1990):
+- Ensure you have legitimate interest for data collection
+- Respect website terms of service to avoid potential legal issues
+- Consider GDPR implications if processing personal data
+- Avoid actions that could be seen as unauthorized computer access
 
 ## Installation
 
@@ -66,7 +118,7 @@ Search Facebook Marketplace for listings.
 |------|------|----------|-------------|
 | `query` | string | Yes | Search term (e.g., "brewing fermenter") |
 | `days` | integer | No | Only show listings from last N days (1, 7, 30) |
-| `location_id` | string | No | Facebook location ID (default: UK) |
+| `location_id` | string | No | Facebook location ID (default: `108339199186201` for UK) |
 
 **Returns:**
 
@@ -151,4 +203,10 @@ facebook_market_place/
 
 ## License
 
-MIT
+MIT License - See LICENSE file for details.
+
+**Note**: This license covers the code only. Users remain responsible for complying with Facebook's Terms of Service and all applicable laws when using this software. The license does not grant permission to violate third-party terms of service or applicable regulations.
+
+## Final Reminder
+
+This project demonstrates web scraping techniques for educational purposes. Always prioritize ethical use, respect website terms of service, and consider official APIs for production applications. The maintainers are not responsible for any misuse of this software.
