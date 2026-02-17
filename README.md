@@ -125,6 +125,12 @@ agentcore configure
 agentcore launch
 ```
 
+## Troubleshooting
+
+### First-time setup / login prompts
+
+The server uses a persistent Chromium browser profile. On first use (or if cookies expire), Facebook may show an info warning or login prompt that blocks scraping. If you encounter empty or garbled results, open Facebook Marketplace manually in the Playwright browser once, dismiss any warnings, and then retry. Subsequent requests should work without intervention.
+
 ## Configuration
 
 | Environment Variable | Default | Description |
